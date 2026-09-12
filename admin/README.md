@@ -10,4 +10,10 @@ Se ingresa con DNI/PIN de una cuenta administradora. La base verifica el rol en 
 
 El panel permite corregir el historial, descargar PDF con la plantilla móvil, administrar cuentas y consultar informes de seguridad. Las listas omiten imágenes; las evidencias se solicitan al abrirlas o preparar el PDF. Las modificaciones requieren una revisión vigente y tienen auditoría cifrada. La cuenta administradora no puede eliminarse a sí misma ni dejar al objetivo sin administradores.
 
-El despliegue vigente fue realizado por el propietario. Los archivos `.env`, `.vercel`, tokens y credenciales no se suben al repositorio.
+## Despliegues desde GitHub
+
+El proyecto Vercel `vigelium-admin` está conectado al repositorio privado `FrancoBevacua/vigelium`, con `admin` como carpeta raíz. Vercel obtiene el código de GitHub y compila en la nube; no necesita que la PC del propietario esté encendida. Las variables privadas permanecen en Vercel.
+
+La rama seguida es `develop`. Vercel la denomina rama de Production, pero la asignación automática de dominios está desactivada (`autoAssignCustomDomains: false`): los builds quedan preparados para revisión, sin reemplazar automáticamente `vigelium-admin.vercel.app`. Después de comprobar un build, usar **Promote** en Vercel para publicarlo en la dirección principal. Las demás ramas generan previews.
+
+El despliegue vigente fue realizado por el propietario y se conserva hasta una promoción explícita. Los archivos `.env`, `.vercel`, tokens y credenciales no se suben al repositorio. La integración compila el panel web; las APK siguen utilizando el proceso Android documentado en el README principal.

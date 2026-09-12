@@ -57,4 +57,4 @@ No se incluyen claves de Vault, PIN, tokens, almacenes de firma ni credenciales 
 
 La versión móvil se valida con TypeScript, 60 pruebas automatizadas y compilación Android. Las pruebas del servicio cubren dos teléfonos, firma y autor de carga, permisos administrativos, edición histórica, cuentas y revocación de sesiones. Falta la comprobación final de instalación en los teléfonos físicos.
 
-El despliegue de Vercel fue realizado por el propietario. Este repositorio contiene el código de desarrollo y no modifica sus variables o configuración de despliegue.
+Vercel está conectado a este repositorio privado y compila el panel desde `admin` al recibir cambios en `develop`. La publicación automática sobre la dirección principal está desactivada: revisar el build y promoverlo explícitamente. Ver el flujo en [admin/README.md](admin/README.md). Las variables privadas se conservan en Vercel.
