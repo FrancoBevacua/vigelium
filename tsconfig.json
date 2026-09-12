@@ -1,5 +1,6 @@
 {
   "extends": "expo/tsconfig.base",
+  "exclude": ["admin", "node_modules", "output", "tmp"],
   "compilerOptions": {
     "strict": true
   }

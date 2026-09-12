@@ -1,0 +1,33 @@
+ -- Acceso administrativo: denegar vigiladores y no entregar datos durante el login.
+ r:=public.guardia_admin_rpc(jsonb_build_object('accion','ingresar','dispositivo',segundo,'dni','45678901','pin','987654'));
+ if (r->>'ok')::boolean or r ? 'estado' or r ? 'token' then raise exception 'FALLO: vigilador entró al panel';end if;
+ r:=public.guardia_admin_rpc(jsonb_build_object('accion','consultar','dispositivo',segundo,'token','invalido'));
+ if (r->>'ok')::boolean then raise exception 'FALLO: sesión inválida aceptada';end if;
+ r:=public.guardia_admin_rpc(jsonb_build_object('accion','ingresar','dispositivo',segundo,'dni','12345678','pin','654321'));
+ if not (r->>'ok')::boolean or r ? 'estado' then raise exception 'FALLO: login administrativo %',r;end if;
+ t:=r->>'token';
+ r:=public.guardia_admin_rpc(jsonb_build_object('accion','consultar','dispositivo',segundo,'token',t));
+ if not (r->>'ok')::boolean or r->'estado'->'guards'->0 ? 'foto' then raise exception 'FALLO: consulta administrativa';end if;
+ rev:=(r->>'revision')::bigint;
+ r:=public.guardia_admin_rpc(jsonb_build_object('accion','editar_asiento','dispositivo',segundo,'token',t,'revision',rev,'col','novedades','id',fx->'estados'->3->'novedades'->1->>'id','datos',jsonb_build_object('texto','Corrección administrativa de turno cerrado')));
+ if not (r->>'ok')::boolean then raise exception 'FALLO: corrección histórica %',r;end if;
+ rev:=(r->>'revision')::bigint;
+ r:=public.guardia_admin_rpc(jsonb_build_object('accion','editar_asiento','dispositivo',segundo,'token',t,'revision',rev-1,'col','novedades','id',fx->'estados'->3->'novedades'->1->>'id','datos',jsonb_build_object('texto','Revisión vieja')));
+ if r->>'codigo'<>'conflicto' then raise exception 'FALLO: sobreescritura administrativa';end if;
+ r:=public.guardia_admin_rpc(jsonb_build_object('accion','crear_cuenta','dispositivo',segundo,'token',t,'revision',rev,'pin','456789','datos',jsonb_build_object('apellido','Panel','nombre','Prueba','dni','56789012','sexo','femenino','fechaNac','1990-01-01','puestoId',fx->'estados'->0->'guards'->0->>'puestoId','franjaId',fx->'estados'->0->'guards'->0->>'franjaId','foto','data:image/png;base64,AA==','rol','vigilador')));
+ if not (r->>'ok')::boolean then raise exception 'FALLO: alta administrativa %',r;end if;
+ rev:=(r->>'revision')::bigint;
+ r:=public.guardia_rpc(jsonb_build_object('accion','ingresar','dispositivo',dispositivo,'dni','56789012','pin','456789'));
+ if not (r->>'ok')::boolean then raise exception 'FALLO: alta del panel no ingresa en móvil';end if;
+ e:=r;
+ r:=public.guardia_admin_rpc(jsonb_build_object('accion','consultar','dispositivo',dispositivo,'token',e->>'token'));
+ if (r->>'ok')::boolean then raise exception 'FALLO: sesión móvil vigilador accede panel';end if;
+ r:=public.guardia_admin_rpc(jsonb_build_object('accion','eliminar_cuenta','dispositivo',segundo,'token',t,'revision',rev,'id',e->>'guardia'));
+ if not (r->>'ok')::boolean then raise exception 'FALLO: baja administrativa %',r;end if;
+ r:=public.guardia_rpc(jsonb_build_object('accion','consultar','dispositivo',dispositivo,'token',e->>'token'));
+ if (r->>'ok')::boolean then raise exception 'FALLO: sesión de cuenta eliminada vigente';end if;
+ if (select count(*) from guardia_private.auditoria a where a.objetivo=(select t.objetivo from guardia_private.dispositivos t where t.hash=guardia_private.hash(segundo)))<3 then raise exception 'FALLO: falta auditoría';end if;
+ -- La firma elegida no puede modificar quién carga ni los permisos de cierre.
+ e:=fx->'estados'->1;
+ e:=jsonb_set(e,'{novedades,0}',(e->'novedades'->0)||jsonb_build_object('guardId','nube-test-b','createdBy','nube-test-a'));
+ perform guardia_private.validar_cambios(fx->'estados'->0,e,'nube-test-a');
