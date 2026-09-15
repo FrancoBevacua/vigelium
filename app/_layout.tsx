@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
@@ -101,9 +102,11 @@ export default function Layout() {
   return (
     <Barrera>
       <SafeAreaProvider>
+        <KeyboardProvider>
         <StoreProvider>
           <ConTema />
         </StoreProvider>
+        </KeyboardProvider>
       </SafeAreaProvider>
     </Barrera>
   );

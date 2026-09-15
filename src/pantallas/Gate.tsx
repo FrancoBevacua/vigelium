@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Image } from 'react-native';
+import { View, Text, Pressable, Image } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useStore, crearObjetivo } from '../store';
@@ -83,7 +84,7 @@ export default function Gate() {
     } catch (e: any) { setError(e.message || 'No se pudo iniciar sesión.'); }
     finally { setOcupado(false); }
   };
-  return <ScrollView contentContainerStyle={{ ...wrap, flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
+  return <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={{ ...wrap, flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
     <Marca sub="Un teléfono del puesto. Una cuenta por guardia. Un informe compartido entre todos los turnos." />
     <Card pad><Stack gap={14}>
       <Eyebrow>{modo === 'migrar' ? 'Vincular DNI a mi cuenta anterior' : 'Iniciar sesión'}</Eyebrow>
@@ -99,7 +100,7 @@ export default function Gate() {
       {!st.me ? <Btn label="Registrarme" variant="ghost" onPress={() => { setModo('registrar'); setError(''); }} /> : null}
       <Btn label={modo === 'migrar' ? 'Volver a iniciar sesión' : 'Vincular DNI a mi cuenta anterior'} variant="ghost" size="sm" onPress={() => { setModo(modo === 'migrar' ? 'entrar' : 'migrar'); setError(''); }} />
     </Stack></Card>
-  </ScrollView>;
+  </KeyboardAwareScrollView>;
 }
 
 /* ================= alta de la cuenta ================= */
@@ -184,7 +185,7 @@ function CrearCuenta({ wrap, ps, onBack }: { wrap: any; ps: any[]; onBack: () =>
   };
 
   return (
-    <ScrollView contentContainerStyle={wrap} keyboardShouldPersistTaps="handled">
+    <KeyboardAwareScrollView bottomOffset={24} contentContainerStyle={wrap} keyboardShouldPersistTaps="handled">
       <Btn label="Volver a iniciar sesión" variant="ghost" onPress={onBack} />
       <Marca sub="Consola de puesto para vigiladores. Directivas, aperturas, informes y Informe general." />
 
@@ -268,6 +269,6 @@ function CrearCuenta({ wrap, ps, onBack }: { wrap: any; ps: any[]; onBack: () =>
           <Btn label={creando ? "Creando cuenta…" : "Crear cuenta y entrar"} disabled={creando} variant="primary" onPress={crear} />
         </Stack>
       </Card>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }

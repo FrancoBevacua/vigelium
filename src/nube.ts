@@ -11,6 +11,7 @@ import { ColaNube, SobreNube } from './colaNube';
 import {abrirCache,sellarCache} from './cacheCifrada';
 import {CODIGO_CORPORATIVO} from './provisionCorporativa';
 import {reconciliarNube} from './reconciliarNube';
+import {almacenLocal} from './almacenLocal';
 
 const K_DISPOSITIVO = 'guardia.nube.dispositivo';
 const K_VINCULO = 'guardia.nube.vinculado';
@@ -35,7 +36,7 @@ export async function iniciarNube() {
   dispositivo = await leerSeguro(K_DISPOSITIVO) || '';
   const vinculada = await leerSeguro(K_VINCULO) === '1';
   if (vinculada && !dispositivo) throw new Error('No está disponible la clave de este teléfono. Se necesita volver a vincularlo.');
-  avisar({vinculada,pendiente:!!await AsyncStorage.getItem(K_COLA)});
+  avisar({vinculada,pendiente:!!await almacenLocal.getItem(K_COLA)});
   return vinculada;
 }
 export async function conectarTelefono(){
@@ -45,7 +46,7 @@ export async function conectarTelefono(){
 }
 /** Se ejecuta sólo al aplicar el reinicio de cuentas autorizado, antes de iniciar la nube. */
 export async function reiniciarVinculoLocal(){
- await AsyncStorage.removeItem(K_COLA);
+ await almacenLocal.removeItem(K_COLA);
   for(const k of [K_DISPOSITIVO,K_VINCULO,K_LLAVE]) {
   if(Platform.OS==='web')localStorage.removeItem(k);else await SecureStore.deleteItemAsync(k);
  }
@@ -56,17 +57,17 @@ async function claveLocal() {
   if (!llave) llave=(async()=>{
     const existente=await leerSeguro(K_LLAVE);
     if (existente) return Crypto.AESEncryptionKey.import(existente,'hex');
-    if (await AsyncStorage.getItem(K_COLA)) throw new Error('No se puede abrir la cola cifrada de este teléfono. No se reemplazaron sus datos.');
+    if (await almacenLocal.getItem(K_COLA)) throw new Error('No se puede abrir la cola cifrada de este teléfono. No se reemplazaron sus datos.');
     const k=await Crypto.AESEncryptionKey.generate(Crypto.AESKeySize.AES256);
     await guardarSeguro(K_LLAVE,await k.encoded('hex')); return k;
   })().catch(()=>{llave=undefined;throw Error('No se pudo acceder a la clave de la copia cifrada. Se conservaron sus datos. No desinstale la aplicación.');});
   return llave;
 }
 async function guardarCola(p: Pendiente) {
-  await AsyncStorage.setItem(K_COLA,await sellarCache(p,await claveLocal()));
+  await almacenLocal.setItem(K_COLA,await sellarCache(p,await claveLocal()));
 }
 async function leerCola(): Promise<Pendiente | null> {
-  const crudo=await AsyncStorage.getItem(K_COLA); if (!crudo) return null;
+  const crudo=await almacenLocal.getItem(K_COLA); if (!crudo) return null;
   return abrirCache(crudo,await claveLocal());
 }
 async function rpc(datos: Record<string, any>): Promise<Respuesta> {
@@ -119,7 +120,7 @@ async function adoptar(r: Respuesta) {
       } catch(e:any) {r.estado=pendiente.estado;avisar({pendiente:true,error:e.message});}
     }
   } else avisar({error:'',pendiente:false});
-  return {estado:r.estado,guardia:actor};
+  return {estado:r.estado,guardia:actor,base:estadoNube.pendiente?pendiente?.base:estadoConfirmado()};
 }
 export async function ingresarNube(dni: string, pin: string) {return adoptar(await rpc({accion:'ingresar',dni,pin}));}
 export async function vincularCuentaNube(dni: string,pin: string,nombre: string,nacimiento: string) {return adoptar(await rpc({accion:'vincular_cuenta',dni,pin,nombre,nacimiento}));}
@@ -147,7 +148,7 @@ export async function vincularNube(codigo: string,e: Estado,g: Vigilador,pin:str
   return sesion;
 }
 const cola=new ColaNube({leer:leerCola,escribir:async p=>{await guardarCola(p);avisar({pendiente:true});},
-  quitar:async()=>{await AsyncStorage.removeItem(K_COLA);avisar({pendiente:false});},
+  quitar:async()=>{await almacenLocal.removeItem(K_COLA);avisar({pendiente:false});},
   consultar:async()=>{const r=await rpc({accion:'consultar'});return {estado:r.estado!,revision:r.revision!};},
   enviar:async p=>(await rpc({accion:'guardar',estado:p.estado,revision:p.revision})).revision!,
   actor:()=>actor,revision:()=>revision,base:estadoConfirmado,reconciliar:reconciliarNube,
@@ -159,11 +160,20 @@ async function sincronizando(f:()=>Promise<void>){
   try{await f();if(!estadoNube.pendiente)avisar({error:''});}catch(e:any){avisar({error:e.message});throw e;}
   finally{trabajos--;avisar({guardando:trabajos>0});}
 }
-export async function guardarEnNube(e: Estado): Promise<void> {
+export async function guardarEnNube(e: Estado,base=estadoConfirmado()): Promise<void> {
   if(!token || !actor)throw new Error('Inicie sesión antes de sincronizar.');
   const copia=JSON.parse(JSON.stringify(e));
   const preparado=preparaciones.catch(()=>{}).then(()=>prepararEstadoNube(copia));preparaciones=preparado;
-  return sincronizando(async()=>{await cola.guardar(await preparado);});
+  return sincronizando(async()=>{await cola.guardar(await preparado,base);});
+}
+/** Confirma la transacción local; la red continúa en su propia cola. */
+export async function guardarLocal(e: Estado,alSincronizar?:(e:Estado)=>void,base=estadoConfirmado()): Promise<void> {
+  if(!token || !actor)throw new Error('Inicie sesión antes de guardar.');
+  const copia=JSON.parse(JSON.stringify(e));
+  const preparado=preparaciones.catch(()=>{}).then(()=>prepararEstadoNube(copia));preparaciones=preparado;
+  const trabajo=cola.encolar(await preparado,base);
+  void sincronizando(()=>trabajo.sincronizado).then(()=>{const confirmado=estadoConfirmado();if(confirmado)alSincronizar?.(confirmado);}).catch(()=>{});
+  await trabajo.local;
 }
 export async function reintentarNube(): Promise<void> {
   await sincronizando(()=>cola.reintentar());

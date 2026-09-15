@@ -42,6 +42,7 @@ export default function Locales() {
           categoria: 'Recorrido de locales', texto: textoRecorrido(r, st.S.site.cliente) } },
       ]);
       st.setSite({ inmobiliariaTel: telefono.trim() });
+      await st.confirmarGuardado();
       setObs(''); setVer(r);
       toast('Recorrido guardado. Confirmá el envío en WhatsApp.');
       await abrirWhatsApp(r);

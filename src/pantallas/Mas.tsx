@@ -20,7 +20,7 @@ export default function Mas() {
       <Cabecera titulo="Más" sub={(st.S.site.cliente || 'Puesto') + (st.S.site.region ? ' · Región ' + st.S.site.region : '')} />
 
       <Eyebrow>Prioridad del servicio</Eyebrow>
-      <Tile icon="informes" titulo="Informe general · 24 hs" sub="Revisar, adjuntar evidencia y compartir con el supervisor" onPress={ir('/informedia')} />
+      <Tile icon="informes" titulo="Informe general · 12 / 24 hs" sub="Revisar, adjuntar evidencia y compartir con el supervisor" onPress={ir('/informedia')} />
 
       {st.esAdmin ? (
         <Pressable onPress={ir('/admin')} style={({ pressed }) => ({
@@ -41,6 +41,7 @@ export default function Mas() {
       ) : null}
 
       <Eyebrow>Operación</Eyebrow>
+      <Tile icon="bell" titulo="Recordatorios" sub="Avisos en Google Calendar o el calendario del teléfono" onPress={ir('/recordatorios')} />
       <Row gap={10} style={{ alignItems: 'stretch' }}>
         <Tile icon="informes" titulo="Informes de seguridad" sub="Registrar un incidente" onPress={ir('/informes')} />
       </Row>

@@ -21,7 +21,7 @@ export default function ServicioActual() {
       <Btn label="Cerrar turno" variant="ghost" onPress={() => { setCerrar(true); setError(''); }} />
     </> : <>
       <Hint>Puede leer el informe compartido. Inicie su turno para agregar novedades.</Hint>
-      <Btn label="Iniciar turno" icon="clock" variant="primary" onPress={() => { try { st.iniciarTurno(); setError(''); } catch (e: any) { setError(e.message); } }} />
+      <Btn label="Iniciar turno" icon="clock" variant="primary" disabled={guardando} onPress={async () => {setGuardando(true);try { st.iniciarTurno(); await st.confirmarGuardado();setError(''); } catch (e: any) { setError(e.message); }finally{setGuardando(false);} }} />
     </>}
     {error && !cerrar ? <Banner kind="warn">{error}</Banner> : null}
     <Sheet visible={cerrar} title="Cierre de turno" onClose={() => { if (!guardando) setCerrar(false); }} footer={<Btn label={guardando ? "Guardando cierre…" : "Confirmar cierre y salir"} disabled={guardando} variant="primary" onPress={async () => {

@@ -16,6 +16,7 @@ const stubs = {
 };
 const cargar = Module._load;
 Module._load = function (name, ...args) {
+  if (name === 'expo-sqlite') return require('./sqlite-native.cjs');
   if (name === 'react-native') return { Platform: stubs.platform };
   if (name === 'expo-crypto') return {
     CryptoDigestAlgorithm: { SHA256: 'sha256' },

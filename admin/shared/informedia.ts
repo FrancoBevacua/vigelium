@@ -8,7 +8,7 @@ import {
 } from './model';
 import { gsName, resumenAcceso, textoIngresoAcceso } from './text';
 
-export type Ventana = { fecha: string; corte: string };
+export type Ventana = { fecha: string; corte: string; duracion?: 12 | 24 };
 
 export type EntradaDia = {
   clave: string;
@@ -29,21 +29,31 @@ export const horaCorte = (S: Estado) => {
   return pad2(Number.isInteger(h) && h >= 0 && h <= 23 ? h : 19) + ':00';
 };
 
-/** La ventana arranca ese día a la hora de corte y termina al día siguiente. */
+/** Intervalo [desde, hasta): un asiento en el relevo pertenece al período siguiente. */
 export function limites(v: Ventana) {
+  const fin=toMin(v.corte)+(v.duracion??24)*60;
   return {
     desde: { fecha: v.fecha, min: toMin(v.corte) },
-    hasta: { fecha: addDays(v.fecha, 1), min: toMin(v.corte) },
+    hasta: { fecha: addDays(v.fecha, Math.floor(fin/1440)), min: fin%1440 },
   };
+}
+export const horaFin = (v:Ventana) => {const m=limites(v).hasta.min;return pad2(Math.floor(m/60))+':'+pad2(m%60);};
+export function ventanaParaEntrega(fechaEntrega:string,corte:string,duracion:12|24=24):Ventana {
+  return {fecha:addDays(fechaEntrega,-Math.floor((toMin(corte)+duracion*60)/1440)),corte,duracion};
+}
+export function ventanaReciente(corte:string,duracion:12|24,cerrada:boolean,ahora=new Date()):Ventana {
+  const hoy=isoDate(ahora),min=ahora.getHours()*60+ahora.getMinutes();
+  const v:Ventana={fecha:min>=toMin(corte)?hoy:addDays(hoy,-1),corte,duracion};
+  if(cerrada){const fin=limites(v).hasta;if(fin.fecha>hoy||(fin.fecha===hoy&&fin.min>min))v.fecha=addDays(v.fecha,-1);}
+  return v;
 }
 
 export function dentro(v: Ventana, fecha: string, hora: string) {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hora || '')) return false;
   const l = limites(v);
   const m = toMin(hora);
-  if (fecha === l.desde.fecha) return m >= l.desde.min;
-  if (fecha === l.hasta.fecha) return m < l.hasta.min;
-  return false;
+  return (fecha>l.desde.fecha||(fecha===l.desde.fecha&&m>=l.desde.min)) &&
+    (fecha<l.hasta.fecha||(fecha===l.hasta.fecha&&m<l.hasta.min));
 }
 
 /** Minutos transcurridos desde el inicio de la ventana, para ordenar. */
@@ -139,6 +149,7 @@ export type OpcionesDia = {
   fecha: string;
   cierre: string;
   fotos: number;
+  ventana?: Ventana;
 };
 
 const VINETA = '   •   ';
@@ -149,6 +160,7 @@ export function textoInformeDia(entradas: EntradaDia[], o: OpcionesDia) {
   partes.push(o.site || 'Libertad Rosario');
   partes.push('');
   partes.push('Fecha: ' + dmy(o.fecha));
+  if(o.ventana)partes.push('Período: '+dmy(o.ventana.fecha)+' '+o.ventana.corte+' a '+dmy(limites(o.ventana).hasta.fecha)+' '+horaFin(o.ventana)+' · '+(o.ventana.duracion??24)+' horas');
   partes.push('');
   partes.push('Novedades:');
   partes.push('');
@@ -206,7 +218,7 @@ export function cierrePorDefecto(S: Estado, v: Ventana) {
   const sitio = S.site.cliente || 'el objetivo';
   return 'Durante todo el servicio los guardias realizaron recorridos en forma aleatoria en ' +
     sitio + ' y en los sectores de playa.\n\n' +
-    'En la fecha hasta las ' + v.corte + ' no se produjeron novedades de trascendencia.';
+    'En la fecha hasta las ' + horaFin(v) + ' no se produjeron novedades de trascendencia.';
 }
 
 /* ---------- resumen corto para las tarjetas ---------- */

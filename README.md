@@ -1,6 +1,6 @@
 # VIGELIUM · Desarrollo
 
-Aplicación Android y panel administrativo para el servicio de vigilancia. Desarrollada por Franco Daniel Bevacua. Repositorio privado, rama `develop`. Versión móvil **1.5.0**, código **9**, identificador `ar.com.securia.app`.
+Aplicación Android y panel administrativo para el servicio de vigilancia. Desarrollada por Franco Daniel Bevacua. Repositorio privado, rama `develop`. Versión móvil **1.6.0**, código **10**, identificador `ar.com.securia.app`.
 
 ## Contenido
 
@@ -17,6 +17,18 @@ Instalar la APK sobre la versión anterior, sin desinstalar ni borrar datos. Las
 Cada novedad permite seleccionar al vigilador que debe firmar. La cuenta que realiza la carga se conserva por separado para controlar la edición durante el turno. Inicio saluda según el sexo indicado en el perfil, sin mostrar el nombre. Los perfiles anteriores pueden completar ese dato desde su editor.
 
 ## Preparar y compilar el móvil
+
+### Cambios de 1.6.0
+
+- Cola cifrada en SQLite propio (`vigelium-datos.db`), con transacciones atómicas y `synchronous=FULL`. Se elimina el límite de AsyncStorage Android para las novedades y evidencias. La migración verifica la copia antes de retirar el valor anterior; una escritura fallida conserva el dato previo.
+- Guardado local sin demora programada. Novedades, informes, importaciones y cierre de turno esperan la escritura local; la sincronización tiene una cola independiente y reintenta cada 30 segundos en primer plano o al volver a la app. Los errores de disco quedan visibles.
+- Formularios con desplazamiento automático al cursor cuando aparece el teclado, incluidos modales, ingreso y registro.
+- **Más → Recordatorios** permite elegir un calendario del teléfono, crear avisos, editarlos y eliminarlos. Los cambios externos se releen al volver. Google sincroniza los eventos si se elige un calendario de esa cuenta y la sincronización está habilitada. El calendario local funciona sólo en ese teléfono. Estos recordatorios personales no se envían a la base corporativa.
+- Informes de 12 o 24 horas calculados desde la fecha de entrega: 07→19, 19→07 o 19→19. El texto y el panel web incluyen los extremos del período. La hora inicial se incluye y la final pertenece al período siguiente.
+
+Verificación automatizada: `npm test`, `npm run typecheck` y `npm --prefix admin run build`. Las pruebas ejecutan SQLite real con valores mayores a 10 MB, fallos `SQLITE_FULL`, migraciones, colas concurrentes, alarmas de calendario y límites de períodos. Los adaptadores Android/iOS de teclado y calendario requieren además una prueba en dispositivo con permisos y cuenta de calendario.
+
+La actualización incluye módulos nativos nuevos: requiere recompilar e instalar la APK, no alcanza con actualizar JavaScript. Los cambios del panel web requieren publicar su build por el procedimiento habitual.
 
 Requisitos: Node.js, Android SDK 36 y JDK 17.
 

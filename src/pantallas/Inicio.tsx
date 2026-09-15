@@ -46,7 +46,7 @@ export default function Inicio() {
 
       <Card pad style={{ borderColor: t.accentLine }}>
         <Stack gap={10}>
-          <Eyebrow>Informe general · 24 horas</Eyebrow>
+          <Eyebrow>Informe general · 12 / 24 horas</Eyebrow>
           <Text style={{ fontFamily: FONT.body, fontSize: 13, lineHeight: 19, color: t.text2 }}>
             Novedades compartidas entre todos los turnos, ordenadas por fecha y horario.
           </Text>

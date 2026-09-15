@@ -1,10 +1,10 @@
-import {entradasDeVentana,horaCorte,textoInformeDia,cierrePorDefecto,hayTrascendentes} from '../shared/informedia';
+import {entradasDeVentana,textoInformeDia,cierrePorDefecto,hayTrascendentes} from '../shared/informedia';
 import {construirPDFDia} from '../shared/pdfplantilla';
 import {nombreArchivoReporte} from '../shared/reporte';
 import {api} from './api';
-export async function descargarReporte(S,fecha){
- const corte=horaCorte(S),ventana={fecha,corte},entradas=entradasDeVentana(S,ventana);
- const guardado=S.infdias.find(x=>!x.deleted&&x.fecha===fecha&&x.desde===corte);
+export async function descargarReporte(S,ventana){
+ const {fecha,corte}=ventana,entradas=entradasDeVentana(S,ventana);
+ const guardado=S.infdias.find(x=>!x.deleted&&x.fecha===fecha&&x.desde===corte&&(x.duracion??24)===(ventana.duracion??24));
  const registros=entradas.filter(e=>e.origen==='novedad').map(e=>({col:'novedades',r:S.novedades.find(n=>n.id===e.ids[0])}));
  if(guardado)registros.push({col:'infdias',r:guardado});
  const fotos=[];for(const {col,r} of registros)for(let i=0;i<(r?.fotosTotal||0);i++){
@@ -12,7 +12,7 @@ export async function descargarReporte(S,fecha){
  }
  const defecto=cierrePorDefecto(S,ventana),incidencias=hayTrascendentes(S,ventana)||guardado?.trascendentes;
  const cierre=guardado?.cierre&&guardado.cierre!==defecto?guardado.cierre:incidencias?'':defecto;
- const borrador=textoInformeDia(entradas,{site:S.site.cliente,fecha,cierre,fotos:fotos.length});
+ const borrador=textoInformeDia(entradas,{site:S.site.cliente,fecha,cierre,fotos:fotos.length,ventana});
  const texto=guardado?.fuente===borrador&&guardado?.texto?guardado.texto:borrador;
  const bytes=[];for(const uri of fotos)bytes.push(await jpeg(uri));
  const pdf=construirPDFDia(texto,bytes);const url=URL.createObjectURL(new Blob([pdf],{type:'application/pdf'}));

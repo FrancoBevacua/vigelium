@@ -1,7 +1,8 @@
 /* Estado de la aplicación: memoria, persistencia local y acciones. */
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
+import { almacenLocal } from './almacenLocal';
 import { prepararFoto, leerBytes, bytesBase64 } from './media';
 import { File, Directory, Paths } from 'expo-file-system';
 import {
@@ -27,6 +28,8 @@ const K_AVISOS = 'consigna.avisos';
 type Ctx = {
   listo: boolean;
   errorInicio:string;
+  errorGuardado:string;
+  confirmarGuardado:()=>Promise<void>;
   reintentarInicio:()=>void;
   S: Estado;
   me: Vigilador | null;
@@ -146,6 +149,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const meRef=useRef<Vigilador|null>(null);meRef.current=me;
   const [listo, setListo] = useState(false);
   const [errorInicio,setErrorInicio]=useState('');
+  const [errorGuardado,setErrorGuardado]=useState('');
   const [intentoInicio,setIntentoInicio]=useState(0);
   const [tema, setTemaEstado] = useState<ModoTema>('dark');
   const [paleta, setPaletaEstado] = useState<PaletaId>(PALETA_DEFECTO);
@@ -154,7 +158,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [estadoNube,setEstadoNube]=useState(nube.verEstadoNube());
   useEffect(()=>nube.escucharNube(setEstadoNube),[]);
   const ref = useRef<Estado>(S);
-  const guardarTimer = useRef<any>(null);
+  const baseVista=useRef<Estado|undefined>(undefined);
+  const guardadoLocal = useRef<Promise<void>>(Promise.resolve());
   ref.current = S;
 
   /* carga inicial */
@@ -166,7 +171,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         let vinculada=await nube.iniciarNube();
         if(Platform.OS!=='web'){await nube.conectarTelefono();vinculada=true;}
         const [crudo, sesion, tm, pal, asis, avi] = await Promise.all([
-          vinculada ? Promise.resolve(null) : AsyncStorage.getItem(K_ESTADO), vinculada ? Promise.resolve(null) : AsyncStorage.getItem(K_SESION),
+          vinculada ? Promise.resolve(null) : almacenLocal.getItem(K_ESTADO), vinculada ? Promise.resolve(null) : AsyncStorage.getItem(K_SESION),
           AsyncStorage.getItem(K_TEMA), AsyncStorage.getItem(K_PALETA),
           AsyncStorage.getItem(K_ASIS), AsyncStorage.getItem(K_AVISOS),
         ]);
@@ -181,7 +186,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         setVocabulario(vocabulario(e));
         ref.current = e; setS(e);
-        if(!vinculada)await AsyncStorage.setItem(K_ESTADO, JSON.stringify(e));
+        if(!vinculada)await almacenLocal.setItem(K_ESTADO, JSON.stringify(e));
         if (sesion && Platform.OS==='web') {
           const g = e.guards.find(x => x.id === sesion && !x.deleted);
           if (g?.cuenta) setMe(g);
@@ -200,15 +205,38 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [intentoInicio]);
 
   const persistir = useCallback((e: Estado) => {
-    clearTimeout(guardarTimer.current);
-    guardarTimer.current = setTimeout(() => {
-      if(nube.verEstadoNube().vinculada)nube.guardarEnNube(e).then(()=>{
-        const confirmado=nube.estadoConfirmado();
-        if(confirmado&&ref.current===e){ref.current=confirmado;setS(confirmado);setMe(g=>g?confirmado.guards.find(x=>x.id===g.id)||g:null);setVocabulario(vocabulario(confirmado));}
-      }).catch(()=>{});
-      else AsyncStorage.setItem(K_ESTADO, JSON.stringify(e)).catch(() => {});
-    }, 350);
+    const base=baseVista.current;
+    const escritura=guardadoLocal.current.catch(()=>{}).then(()=>nube.verEstadoNube().vinculada
+      ? nube.guardarLocal(e,confirmado=>{
+        if(ref.current===e){baseVista.current=confirmado;ref.current=confirmado;setS(confirmado);setMe(g=>g?confirmado.guards.find(x=>x.id===g.id)||g:null);setVocabulario(vocabulario(confirmado));}
+      },base) : almacenLocal.setItem(K_ESTADO,JSON.stringify(e)));
+    guardadoLocal.current=escritura;
+    escritura.then(()=>{if(guardadoLocal.current===escritura)setErrorGuardado('');},()=>{
+      if(guardadoLocal.current===escritura)setErrorGuardado('No se pudo guardar el último cambio en el teléfono. Mantenga la aplicación abierta y pulse Reintentar.');
+    });
+    return escritura;
   }, []);
+
+  // Reintenta al volver a la app y cada 30 s en primer plano. La copia local
+  // nunca espera Internet y la confirmación remota no pisa nuevas ediciones.
+  useEffect(()=>{
+    if(!listo||!me)return;
+    let ocupado=false;
+    const reintentar=async()=>{
+      if(ocupado||AppState.currentState!=='active'||nube.verEstadoNube().guardando||nube.verEstadoNube().reautenticar)return;
+      if(!errorGuardado&&!nube.verEstadoNube().pendiente)return;
+      ocupado=true;const actual=ref.current;
+      try{
+        if(errorGuardado)await persistir(actual);
+        await nube.reintentarNube();
+        const confirmado=nube.estadoConfirmado();
+        if(confirmado&&ref.current===actual){baseVista.current=confirmado;ref.current=confirmado;setS(confirmado);}
+      }catch{}finally{ocupado=false;}
+    };
+    const sub=AppState.addEventListener('change',s=>{if(s==='active')void reintentar();});
+    const timer=setInterval(reintentar,30000);
+    return()=>{sub.remove();clearInterval(timer);};
+  },[listo,me?.id,errorGuardado,persistir]);
 
   const aplicar = useCallback((mut: (e: Estado) => void) => {
       const prev = ref.current;
@@ -229,28 +257,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     aplicar(e => Object.assign(e, aplicarCambios(e, cambios, me, servicio)));
   }, [aplicar, me]);
 
-  const aceptarNube=async(r:{estado:Estado;guardia:string})=>{
-    clearTimeout(guardarTimer.current);
+  const aceptarNube=async(r:{estado:Estado;guardia:string;base?:Estado})=>{
+    baseVista.current=r.base||r.estado;
     ref.current=r.estado;setS(r.estado);meRef.current=r.estado.guards.find(g=>g.id===r.guardia&&!g.deleted)||null;setMe(meRef.current);
     setVocabulario(vocabulario(r.estado));
-    await AsyncStorage.removeItem(K_ESTADO);await AsyncStorage.removeItem(K_SESION);
+    await almacenLocal.removeItem(K_ESTADO);await AsyncStorage.removeItem(K_SESION);
   };
 
   const api: Ctx = useMemo(() => ({
     listo, S, me, tema, paleta, asistente, avisos,
-    errorInicio,reintentarInicio:()=>setIntentoInicio(v=>v+1),
+    errorInicio,errorGuardado,confirmarGuardado:()=>guardadoLocal.current,reintentarInicio:()=>setIntentoInicio(v=>v+1),
     nube:estadoNube,
-    ingresarNube:async(dni,pin)=>aceptarNube(await nube.ingresarNube(dni,pin)),
+    ingresarNube:async(dni,pin)=>{await guardadoLocal.current;await aceptarNube(await nube.ingresarNube(dni,pin));},
     vincularCuentaNube:async(dni,pin,nombre,nacimiento)=>aceptarNube(await nube.vincularCuentaNube(dni,pin,nombre,nacimiento)),
     registrarNube:async(g,pin)=>aceptarNube(await nube.registrarNube(g,pin)),
       entrarCorporativo:async(id,pin)=>{
         const g=ref.current.guards.find(x=>x.id===id&&!x.deleted);if(!g)throw Error('Cuenta no disponible.');
         if(Platform.OS==='web'){setMe(g);return;}
-        clearTimeout(guardarTimer.current);
-        await AsyncStorage.setItem(K_ESTADO,JSON.stringify(ref.current));
+        await guardadoLocal.current;
+        await almacenLocal.setItem(K_ESTADO,JSON.stringify(ref.current));
         await aceptarNube(await nube.vincularNube(CODIGO_CORPORATIVO,ref.current,g,pin));
       },
-    reintentarNube:async()=>{clearTimeout(guardarTimer.current);await nube.guardarEnNube(ref.current);await nube.reintentarNube();await aceptarNube(await nube.consultarNube());},
+    reintentarNube:async()=>{const actual=ref.current;await persistir(actual);await nube.reintentarNube();const confirmado=nube.estadoConfirmado();if(confirmado&&ref.current===actual){baseVista.current=confirmado;ref.current=confirmado;setS(confirmado);}},
     cargarCatalogoNube:async()=>{const e=await nube.catalogoNube();if(!meRef.current){ref.current=e;setS(e);}},
     esAdmin: !!me && me.rol === 'admin',
     setTema: (m) => { setTemaEstado(m); AsyncStorage.setItem(K_TEMA, m).catch(() => {}); },
@@ -263,7 +291,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     },
     salir: async () => {
       if (turnoAbierto(ref.current, me?.id)) throw new Error('Cierre su turno desde Inicio o Informe general antes de salir.');
-      if(nube.verEstadoNube().vinculada){clearTimeout(guardarTimer.current);await nube.guardarEnNube(ref.current);await nube.cerrarSesionNube();ref.current=estadoVacio();setS(estadoVacio());}
+      await guardadoLocal.current;
+      if(nube.verEstadoNube().vinculada){await nube.guardarEnNube(ref.current,baseVista.current);await nube.cerrarSesionNube();ref.current=estadoVacio();setS(estadoVacio());}
       setMe(null); AsyncStorage.removeItem(K_SESION).catch(() => {});
     },
     iniciarTurno: () => {
@@ -274,12 +303,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (!me) throw new Error('Inicie sesión.');
       const e = aplicarCambios(ref.current, cerrarServicio(ref.current, me, cierre), me, true);
       e.updatedAt = now();
-      clearTimeout(guardarTimer.current);
+      await guardadoLocal.current;
       if(nube.verEstadoNube().vinculada){
-        try{await nube.guardarEnNube(e);}catch(err){if(nube.verEstadoNube().pendiente){ref.current=e;setS(e);}throw err;}
-        ref.current=e;setS(e);await nube.cerrarSesionNube();setMe(null);ref.current=estadoVacio();setS(estadoVacio());return;
+        await nube.guardarLocal(e,undefined,baseVista.current);
+        ref.current=e;setS(e);
+        await nube.reintentarNube();await nube.cerrarSesionNube();setMe(null);ref.current=estadoVacio();setS(estadoVacio());return;
       }
-      try { await AsyncStorage.setItem(K_ESTADO, JSON.stringify(e)); }
+      try { await almacenLocal.setItem(K_ESTADO, JSON.stringify(e)); }
       catch { throw new Error('No se pudo guardar el cierre en el teléfono. Liberá espacio y vuelva a intentarlo.'); }
       ref.current = e; setS(e);
       setMe(null); await AsyncStorage.removeItem(K_SESION).catch(() => {});
@@ -312,7 +342,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         return destino.uri;
       } catch (err) {
         console.warn('No se pudo copiar el archivo', err);
-        return uri;
+        throw new Error('No se pudo guardar el archivo en el teléfono. Vuelva a adjuntarlo.');
       }
     },
     guardarFoto: async (uri: string) => {
@@ -330,7 +360,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         throw new Error('No se pudo guardar la foto en este dispositivo.');
       }
     },
-  }), [listo, S, me, tema, paleta, asistente, avisos, estadoNube, aplicar, persistir, lote, errorInicio]);
+  }), [listo, S, me, tema, paleta, asistente, avisos, estadoNube, aplicar, persistir, lote, errorInicio, errorGuardado]);
 
   return <StoreCtx.Provider value={api}>{children}</StoreCtx.Provider>;
 }

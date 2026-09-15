@@ -6,6 +6,12 @@ const {COLS}=require('../src/model.ts');
 const {ColaNube}=require('../src/colaNube.ts');
 const copia=x=>JSON.parse(JSON.stringify(x));
 function estado(){return {...Object.fromEntries(COLS.map(k=>[k,[]])),site:{cliente:'Prueba'},guards:[{id:'a',rol:'vigilador',nombre:'Ana',updatedAt:1}],updatedAt:1};}
+test('una preparación demorada conserva cambios remotos aunque la revisión ya esté actualizada',async()=>{
+ const base=estado(),local=copia(base);local.novedades=[{id:'local',texto:'Pendiente'}];
+ let remoto=copia(base);remoto.novedades=[{id:'remota',texto:'Agregada en la web'}];let pendiente=null;
+ const cola=new ColaNube({leer:async()=>copia(pendiente),escribir:async p=>{pendiente=copia(p);},quitar:async()=>{pendiente=null;},consultar:async()=>({estado:copia(remoto),revision:2}),enviar:async p=>{remoto=copia(p.estado);return 3;},actor:()=> 'a',revision:()=>2,base:()=>remoto,reconciliar:reconciliarNube,confirmar:()=>{}});
+ await cola.guardar(local,base);assert.deepEqual(new Set(remoto.novedades.map(n=>n.id)),new Set(['local','remota']));
+});
 test('recupera notas antiguas conservando el administrador y las cuentas del servidor',()=>{
  const local=estado(),remoto=estado();local.novedades.push({id:'n',texto:'Pendiente'});remoto.guards[0].rol='admin';remoto.guards[0].updatedAt=2;remoto.guards.push({id:'b',nombre:'Bruno'});
  const r=reconciliarNube(local,remoto);assert.equal(r.guards[0].rol,'admin');assert.equal(r.guards.length,2);assert.equal(r.novedades[0].texto,'Pendiente');assert.equal(remoto.novedades.length,0);

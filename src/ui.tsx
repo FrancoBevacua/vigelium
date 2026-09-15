@@ -5,6 +5,7 @@ import {
   useColorScheme, ViewStyle, TextStyle, StyleProp, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Theme, LIGHT, DARK, FONT, R, PaletaId, temaDe } from './theme';
 import { Icon } from './icons';
 
@@ -397,15 +398,15 @@ export function Sheet({ visible, title, onClose, onBack, children, footer }: {
             <Text style={{ flex: 1, fontFamily: FONT.dispBold, fontSize: 21, color: t.text }}>{title}</Text>
             <Btn icon="x" variant="ghost" size="sm" onPress={onClose} />
           </View>
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled">
+          <KeyboardAwareScrollView bottomOffset={24} style={{flexShrink:1}} contentContainerStyle={{ padding: 16, gap: 14 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
             {children}
-          </ScrollView>
           {footer ? (
             <View style={{
               flexDirection: 'row', gap: 9, padding: 12, paddingBottom: 12 + ins.bottom,
               borderTopWidth: 1, borderTopColor: t.line,
             }}>{footer}</View>
           ) : null}
+          </KeyboardAwareScrollView>
         </View>
         <AvisoToast modal />
       </View>
@@ -464,7 +465,7 @@ export function Pantalla({ children, gap = 14, top }:
   const t = useTheme();
   const ins = useSafeAreaInsets();
   return (
-    <ScrollView
+    <KeyboardAwareScrollView bottomOffset={24} keyboardDismissMode="on-drag"
       style={{ flex: 1, backgroundColor: t.bg }}
       contentContainerStyle={{
         padding: 14, paddingTop: 14 + (top ? ins.top : 0),
@@ -472,7 +473,7 @@ export function Pantalla({ children, gap = 14, top }:
       }}
       keyboardShouldPersistTaps="handled">
       {children}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

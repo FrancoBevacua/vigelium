@@ -17,14 +17,20 @@ export class ColaNube {
     reconciliar?:(local:Estado,remoto:Estado,base?:Estado)=>Estado;
   }){}
   private exclusivo<T>(f:()=>Promise<T>):Promise<T>{const p=this.disco.catch(()=>{}).then(f);this.disco=p;return p;}
-  guardar(estado:Estado):Promise<void>{
-    const copia=JSON.parse(JSON.stringify(estado));const guardia=this.io.actor();const numero=++this.numero;
+  guardar(estado:Estado,base?:Estado):Promise<void>{return this.encolar(estado,base).sincronizado;}
+  encolar(estado:Estado,base?:Estado):{local:Promise<void>;sincronizado:Promise<void>}{
+    const copia=JSON.parse(JSON.stringify(estado));const guardia=this.io.actor();
+    const baseCopia=base?JSON.parse(JSON.stringify(base)):undefined;
     const listo=this.exclusivo(async()=>{
       const anterior=await this.io.leer();
       if(anterior && anterior.guardia!==guardia)throw new Error('El guardia anterior debe sincronizar sus cambios pendientes.');
-      await this.io.escribir({estado:copia,guardia,numero,revision:anterior?.revision??this.io.revision(),enviado:anterior?.enviado,origenEnviado:anterior?.origenEnviado,base:anterior?.base??this.io.base?.()});
+      const numero=this.numero=Math.max(this.numero,anterior?.numero??0)+1;
+      await this.io.escribir({estado:copia,guardia,numero,revision:anterior?.revision??this.io.revision(),enviado:anterior?.enviado,origenEnviado:anterior?.origenEnviado,base:baseCopia??anterior?.base??this.io.base?.()});
     });
-    const enviado=this.red.catch(()=>{}).then(async()=>{await listo;await this.vaciar();});this.red=enviado;return enviado;
+    const enviado=this.red.catch(()=>{}).then(async()=>{await listo;await this.vaciar();});this.red=enviado;
+    // Quien espera sólo el disco no debe producir un rechazo no manejado de red.
+    enviado.catch(()=>{});
+    return {local:listo,sincronizado:enviado};
   }
   reintentar():Promise<void>{const p=this.red.catch(()=>{}).then(()=>this.vaciar());this.red=p;return p;}
   async esperar(){await this.disco;await this.red;}
@@ -37,7 +43,7 @@ export class ColaNube {
       if(mismoEstado(servidor.estado,p.estado)){
         await this.aceptar(p,servidor.revision);continue;
       }
-      if(servidor.revision!==p.revision){
+      if(servidor.revision!==p.revision || (this.io.reconciliar&&p.base&&!mismoEstado(servidor.estado,p.base))){
         if(this.io.reconciliar || !p.enviado || !mismoEstado(servidor.estado,p.enviado)){
           if(!this.io.reconciliar)throw new Error('Hay cambios más recientes en la nube. Se conservó su copia cifrada y no se sobrescribió el historial.');
           const base=p.enviado&&mismoEstado(servidor.estado,p.enviado)?p.origenEnviado??p.enviado:p.base;

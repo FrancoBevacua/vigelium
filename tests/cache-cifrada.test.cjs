@@ -47,9 +47,10 @@ test('acceso, escritura sin red, PIN incorrecto y reingreso recuperan la cola ci
   await nube.iniciarNube();await nube.conectarTelefono();await nube.ingresarNube('12345678','654321');
   const local=JSON.parse(JSON.stringify(remoto));local.novedades=[{id:'pendiente',texto:'Novedad pendiente'}];sinRed=true;
   await assert.rejects(nube.guardarEnNube(local),/Revise Internet/);
-  const cifrado=almacenamiento.get('guardia.nube.cola.v1');assert.ok(cifrado);assert.ok(!cifrado.includes('pendiente'));
-  await assert.rejects(nube.ingresarNube('12345678','000000'),/PIN incorrectos/);assert.equal(almacenamiento.get('guardia.nube.cola.v1'),cifrado);
-  sinRed=false;const sesion=await nube.ingresarNube('12345678','654321');assert.equal(sesion.estado.novedades.length,1);assert.equal(almacenamiento.has('guardia.nube.cola.v1'),false);
+  const {almacenLocal}=require('../src/almacenLocal.ts');
+  const cifrado=await almacenLocal.getItem('guardia.nube.cola.v1');assert.ok(cifrado);assert.ok(!cifrado.includes('pendiente'));
+  await assert.rejects(nube.ingresarNube('12345678','000000'),/PIN incorrectos/);assert.equal(await almacenLocal.getItem('guardia.nube.cola.v1'),cifrado);
+  sinRed=false;const sesion=await nube.ingresarNube('12345678','654321');assert.equal(sesion.estado.novedades.length,1);assert.equal(await almacenLocal.getItem('guardia.nube.cola.v1'),null);
   await nube.cerrarSesionNube();const recuperada=await nube.registrarNube(remoto.guards[0],'654321');assert.equal(recuperada.guardia,'guardia-prueba');await nube.cerrarSesionNube();
  }finally{global.fetch=originalFetch;}
 });

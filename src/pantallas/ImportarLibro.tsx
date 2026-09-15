@@ -51,6 +51,7 @@ export default function ImportarLibro({ abierto, fecha, onClose }: { abierto: bo
       const uri = adjuntar && foto ? await st.guardarFoto(foto) : '';
       const lote = uid();
       st.putVarios(nuevas.map(a => ({ col: 'novedades' as const, obj: { ...a, id: uid(), guardId: a.guardId, origenTipo: 'libro-foto', origenId: lote, fotos: uri ? [uri] : [] } })));
+      await st.confirmarGuardado();
       onClose(); toast(nuevas.length + ' novedades importadas al libro y al informe general');
     } catch (e: any) { setError(e.message || 'No se pudieron importar los asientos.'); }
     finally { setGuardando(false); }

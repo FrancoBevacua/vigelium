@@ -167,6 +167,8 @@ export type InformeDia = Rec & {
   fecha: string;          // día de inicio de la ventana
   desde: string;          // hora de corte, por ejemplo 19:00
   hasta: string;
+  duracion?: 12 | 24;     // versiones anteriores: 24 horas
+  fechaHasta?: string;
   cierre: string;         // párrafo final, editable
   texto: string;          // el informe redactado, tal como se comparte
   fotos: string[];
